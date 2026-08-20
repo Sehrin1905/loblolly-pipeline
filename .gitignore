@@ -1,0 +1,7 @@
+data/
+*.tif
+*.npy
+*.zip
+*.png
+__pycache__/
+.DS_Store
