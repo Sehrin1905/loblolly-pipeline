@@ -32,27 +32,3 @@ def make_overlay(img: np.ndarray,
     return blended
 
 
-if __name__ == "__main__":
-    import sys
-
-    mosaic_path     = sys.argv[1] if len(sys.argv) > 1 else "data/mosaic.tif"
-    labels_path     = sys.argv[2] if len(sys.argv) > 2 else "data/labels.npy"
-    classified_path = sys.argv[3] if len(sys.argv) > 3 else "data/classified.csv"
-    out_path        = sys.argv[4] if len(sys.argv) > 4 else "data/overlay.png"
-
-    print(f"Loading {mosaic_path} ...")
-    img = cv2.imread(mosaic_path)
-
-    print(f"Loading {labels_path} ...")
-    labels = np.load(labels_path)
-
-    print(f"Loading {classified_path} ...")
-    classified_df = pd.read_csv(classified_path)
-
-    print("Building overlay ...")
-    overlay = make_overlay(img, labels, classified_df)
-
-    cv2.imwrite(out_path, overlay)
-    print(f"Saved → {out_path}")
-    print(f"  Legend: gray=tracheid, green=ray, red=resin_duct")
-    

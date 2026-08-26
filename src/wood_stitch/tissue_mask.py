@@ -44,20 +44,3 @@ def apply_tissue_mask(img: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return result
 
 
-if __name__ == "__main__":
-    import sys
-    import cv2
-
-    mosaic_path = sys.argv[1] if len(sys.argv) > 1 else "data/mosaic.tif"
-    out_path = sys.argv[2] if len(sys.argv) > 2 else "data/tissue_mask.png"
-
-    print(f"Loading {mosaic_path} ...")
-    img = cv2.imread(mosaic_path)
-
-    print("Computing tissue mask ...")
-    mask = make_tissue_mask(img)
-
-    # Save mask as PNG (white = tissue, black = background)
-    cv2.imwrite(out_path, (mask * 255).astype(np.uint8))
-    print(f"Saved → {out_path}")
-    

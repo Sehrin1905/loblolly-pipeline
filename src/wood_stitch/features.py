@@ -78,18 +78,3 @@ def compute_features(labels: np.ndarray) -> pd.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    import sys
-
-    labels_path = sys.argv[1] if len(sys.argv) > 1 else "data/labels.npy"
-    out_path    = sys.argv[2] if len(sys.argv) > 2 else "data/features.csv"
-
-    print(f"Loading {labels_path} ...")
-    labels = np.load(labels_path)
-
-    print("Computing features ...")
-    df = compute_features(labels)
-
-    df.to_csv(out_path, index=False)
-    print(f"Saved → {out_path}  ({len(df)} cells)")
-    

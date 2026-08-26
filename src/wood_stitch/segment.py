@@ -38,21 +38,3 @@ def segment(img: np.ndarray,
     return masks.astype(np.int32)
 
 
-if __name__ == "__main__":
-    import sys
-
-    mosaic_path = sys.argv[1] if len(sys.argv) > 1 else "data/mosaic.tif"
-    mask_path   = sys.argv[2] if len(sys.argv) > 2 else "data/tissue_mask.png"
-    out_path    = sys.argv[3] if len(sys.argv) > 3 else "data/labels.npy"
-
-    print(f"Loading {mosaic_path} ...")
-    img = cv2.imread(mosaic_path)
-
-    print(f"Loading {mask_path} ...")
-    tissue_mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE) > 127
-
-    print("Running segmentation ...")
-    labels = segment(img, tissue_mask)
-
-    np.save(out_path, labels)
-    print(f"Saved → {out_path}  ({labels.max()} cells)")

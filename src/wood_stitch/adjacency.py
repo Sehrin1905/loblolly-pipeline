@@ -48,18 +48,3 @@ def count_neighbors(edge_df: pd.DataFrame) -> pd.DataFrame:
         columns={"index": "label", 0: "n_neighbors"}
     )
 
-
-if __name__ == "__main__":
-    import sys
-
-    labels_path = sys.argv[1] if len(sys.argv) > 1 else "data/labels.npy"
-    out_path    = sys.argv[2] if len(sys.argv) > 2 else "data/adjacency.csv"
-
-    print(f"Loading {labels_path} ...")
-    labels = np.load(labels_path)
-
-    print("Computing adjacency ...")
-    edge_df = compute_adjacency(labels)
-
-    edge_df.to_csv(out_path, index=False)
-    print(f"Saved → {out_path}  ({len(edge_df)} adjacent pairs)")

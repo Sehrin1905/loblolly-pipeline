@@ -37,17 +37,3 @@ def classify_cells(features_df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-if __name__ == "__main__":
-    import sys
-
-    features_path = sys.argv[1] if len(sys.argv) > 1 else "data/features.csv"
-    out_path      = sys.argv[2] if len(sys.argv) > 2 else "data/classified.csv"
-
-    print(f"Loading {features_path} ...")
-    df = pd.read_csv(features_path)
-
-    print("Classifying cells ...")
-    df = classify_cells(df)
-
-    df.to_csv(out_path, index=False)
-    print(f"Saved → {out_path}")

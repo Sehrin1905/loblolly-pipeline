@@ -123,23 +123,3 @@ def deconvolve(img: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-if __name__ == "__main__":
-    import sys
-
-    mosaic_path = sys.argv[1] if len(sys.argv) > 1 else "data/mosaic.tif"
-
-    print(f"Loading {mosaic_path} ...")
-    img = cv2.imread(mosaic_path)
-
-    print("Running color deconvolution ...")
-    results = deconvolve(img)
-
-    # Save each channel as a normalized grayscale image
-    import os
-    out_dir = os.path.dirname(mosaic_path)
-    for key in ("safranin", "astra_blue", "residual"):
-        channel = results[key]
-        normalized = cv2.normalize(channel, None, 0, 255, cv2.NORM_MINMAX)
-        out_path = os.path.join(out_dir, f"{key}.png")
-        cv2.imwrite(out_path, normalized.astype(np.uint8))
-        print(f"  Saved → {out_path}")
