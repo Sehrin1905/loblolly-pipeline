@@ -1,5 +1,5 @@
 # Loblolly Pine Tracheid Detection Pipeline 
-A pipeline for the detection and classification of cells in transverse section of Loblolly pine (Pinus taeda). Developed to examine changes in tracheid anatomy across changes in elevation (marsh vs. reference zones), time (Recent vs. Old growth), and salinity
+A pipeline for the detection and classification of cells in a transverse section of Loblolly pine (Pinus taeda). Developed to examine changes in tracheid anatomy across changes in elevation (marsh vs. reference zones), time (Recent vs. Old growth), and salinity
 # Pipeline overview
 stitch → tissue mask → deconvolve → segment → features → adjacency → classify → visualize
 # Setup
@@ -56,7 +56,7 @@ Samples are named '[Site]_[ID]_[Time]
 ## Dependencies 
 - [Cellpose](https://github.com/MouseLand/cellpose) for cell segmentation 
 - OpenCV - stitching 
-- scikit-image - morphology and shape distincion 
+- scikit-image - morphology and shape distinctions 
 - pandas - feature tables 
 - matplotlib - figures 
 Dependencies are managed with 'uv' and tracked in 'pyproject.toml' 
