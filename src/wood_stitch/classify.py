@@ -23,7 +23,7 @@ def classify_cells(features_df: pd.DataFrame) -> pd.DataFrame:
 
     # Ray: elongated and not huge, excluding resin ducts
     is_ray = (
-        (df["eccentricity"] > 0.85)
+        (df["eccentricity"] > 0.90)
         & (df["area"] < 2 * median_area)
         & (~is_resin_duct)
     )
