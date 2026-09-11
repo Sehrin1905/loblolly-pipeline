@@ -25,6 +25,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Folders to exclude from upload
+EXCLUDE = {
+    "***RETRY_REF 801 OLD",
+    "Etc",
+    "Image Registry",
+    "REF 801 OLD - DON'T USE ",
+    "System Volume Information",
+}
+
 
 def get_r2_client():
     return boto3.client(
@@ -92,10 +101,10 @@ def build_manifest(sample_name: str, files: list[dict]) -> dict:
     }
 
 
-def upload_sample(client, bucket: str, sample_name: str, 
+def upload_sample(client, bucket: str, sample_name: str,
                   sample_dir: Path, max_workers: int = 4) -> dict:
     """Upload all tiles for one sample to R2."""
-    
+
     # Collect all tif files
     tif_files = sorted(sample_dir.glob("*.tif"))
     if not tif_files:
@@ -104,7 +113,7 @@ def upload_sample(client, bucket: str, sample_name: str,
 
     # Sanitize sample name for R2 key (replace spaces with underscores)
     safe_name = sample_name.replace(" ", "_")
-    
+
     print(f"\n{'='*60}")
     print(f"Sample: {sample_name}")
     print(f"Files: {len(tif_files)}")
@@ -215,10 +224,12 @@ def main():
             sys.exit(1)
         upload_sample(client, bucket, args.sample, sample_dir, args.workers)
     else:
-        # Upload all samples
-        sample_dirs = [d for d in sorted(dataset_dir.iterdir()) 
-                      if d.is_dir() and not d.name.startswith(".")]
-        
+        # Upload all samples excluding unwanted folders
+        sample_dirs = [d for d in sorted(dataset_dir.iterdir())
+                      if d.is_dir()
+                      and not d.name.startswith(".")
+                      and d.name not in EXCLUDE]
+
         print(f"\nFound {len(sample_dirs)} sample folders:")
         total_files = 0
         total_size = 0
@@ -228,7 +239,7 @@ def main():
             total_files += len(tifs)
             total_size += size
             print(f"  {d.name}: {len(tifs)} tiles ({size/1e9:.2f} GB)")
-        
+
         print(f"\nTotal: {total_files} files, {total_size/1e9:.2f} GB")
         print("\nProceed? (y/n): ", end="")
         if input().strip().lower() != "y":
