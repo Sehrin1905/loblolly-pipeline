@@ -27,7 +27,6 @@ load_dotenv()
 
 # Folders to exclude from upload
 EXCLUDE = {
-    "***RETRY_REF 801 OLD",
     "Etc",
     "Image Registry",
     "REF 801 OLD - DON'T USE ",
@@ -62,11 +61,14 @@ def get_remote_sha256(client, bucket: str, key: str) -> str | None:
         return None
 
 
-def upload_file(client, bucket: str, local_path: Path, r2_key: str) -> dict:
+def upload_file(client, bucket: str, local_path: Path, r2_key: str, 
+                max_retries: int = 3) -> dict:
     """
-    Upload a single file to R2 with SHA-256 verification.
+    Upload a single file to R2 with SHA-256 verification and retries.
     Returns result dict with status, key, size, sha256.
     """
+    import time
+
     local_sha256 = sha256_file(local_path)
     size = local_path.stat().st_size
 
@@ -75,13 +77,24 @@ def upload_file(client, bucket: str, local_path: Path, r2_key: str) -> dict:
     if remote_sha256 == local_sha256:
         return {"status": "skipped", "key": r2_key, "size": size, "sha256": local_sha256}
 
-    # Upload with SHA-256 as metadata
-    client.upload_file(
-        str(local_path),
-        bucket,
-        r2_key,
-        ExtraArgs={"Metadata": {"sha256": local_sha256}},
-    )
+    # Upload with retries
+    for attempt in range(max_retries):
+        try:
+            client.upload_file(
+                str(local_path),
+                bucket,
+                r2_key,
+                ExtraArgs={"Metadata": {"sha256": local_sha256}},
+            )
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt  # exponential backoff: 1s, 2s, 4s
+                print(f"  Retry {attempt + 1}/{max_retries} for {local_path.name} (waiting {wait}s)...")
+                time.sleep(wait)
+            else:
+                return {"status": "failed", "key": r2_key, "size": size, 
+                        "sha256": local_sha256, "error": str(e)}
 
     # Verify upload
     remote_sha256 = get_remote_sha256(client, bucket, r2_key)
