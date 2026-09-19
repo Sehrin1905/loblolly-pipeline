@@ -26,7 +26,7 @@ def parse_sample(name):
         site = "Marsh"
     else:
         site = "Reference"
-    period = parts[-1]  # Recent or Old
+    period = parts[-1].capitalize()  # normalize Recent/RECENT/recent → Recent
     return site, period
 
 df[["site", "period"]] = df["sample"].apply(

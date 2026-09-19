@@ -1,6 +1,7 @@
 [cache]
 # Local directory where R2 data will be synced to
-local_cache_dir = "/scratch/username/loblolly-cache"
+# On Pegasus use your scratch directory e.g. /scratch/shossain/loblolly-cache
+local_cache_dir = "/scratch/loblolly-cache"
 
 [pipeline]
 # Process these samples (leave empty to process all)
@@ -12,8 +13,8 @@ mosaic_resize_factor = 0.5
 [cellpose]
 # Use GPU if available
 use_gpu = true
-# Cell diameter (None = auto-detect)
-diameter = null
+# diameter is optional - omit to auto-detect, or set a number e.g. 30.0
+# diameter = 30.0
 
 [r2]
-bucket_name = "loblolly-pipeline"
+bucket_name = "sehrin-image-stitching"

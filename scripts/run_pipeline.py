@@ -81,7 +81,11 @@ def sync_r2_to_local(client, bucket: str, prefix: str, local_dir: Path) -> None:
 
     for key, etag in remote.items():
         rel_path = key[len(prefix):].lstrip("/")
-        local_path = local_dir / rel_path
+        # Security: prevent path traversal attacks
+        local_path = (local_dir / rel_path).resolve()
+        if not str(local_path).startswith(str(local_dir.resolve())):
+            log.warning(f"  Skipping unsafe path: {rel_path}")
+            continue
         local_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Check if file needs updating
@@ -125,7 +129,7 @@ def upload_sample_outputs(client, bucket: str, sample_name: str, sample_dir: Pat
     for filename in output_files:
         local_path = sample_dir / filename
         if local_path.exists():
-            r2_key = f"samples/{sample_name}/{filename}"
+            r2_key = f"outputs/{run_id}/{sample_name}/{filename}"
             upload_to_r2(client, bucket, local_path, r2_key)
 
 
@@ -265,6 +269,13 @@ def main():
     bucket = cfg["r2"]["bucket_name"]
     samples_to_run = cfg["pipeline"].get("samples", [])
 
+    # Generate unique run ID
+    from datetime import datetime, timezone
+    import subprocess
+    git_rev = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+    run_id = f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{git_rev}"
+    log.info(f"Run ID: {run_id}")
+
     log.info("Loblolly Pipeline starting ...")
     log.info(f"Cache dir: {cache_dir}")
     log.info(f"R2 bucket: {bucket}")
@@ -274,7 +285,7 @@ def main():
 
     # List available samples from R2
     log.info("Listing samples in R2 ...")
-    remote_objects = list_r2_objects(client, bucket, "samples/")
+    remote_objects = list_r2_objects(client, bucket, "raw/")
     available_samples = set()
     for key in remote_objects:
         parts = key.split("/")
@@ -294,7 +305,7 @@ def main():
 
         # Sync tiles from R2
         log.info(f"\nSyncing {sample_name} from R2 ...")
-        sync_r2_to_local(client, bucket, f"samples/{sample_name}/tiles", sample_dir / "tiles")
+        sync_r2_to_local(client, bucket, f"raw/{sample_name}", sample_dir / "tiles")
 
         # Run pipeline
         try:
