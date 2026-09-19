@@ -66,9 +66,16 @@ def compute_wall_thickness(labels: np.ndarray) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
-def compute_features(labels: np.ndarray) -> pd.DataFrame:
+def compute_features(labels: np.ndarray,
+                     pixel_size_um: float | None = None) -> pd.DataFrame:
     """
     Full per-cell feature table: morphometrics + wall thickness.
+    
+    Args:
+        labels: (H, W) int32 label map from segmentation
+        pixel_size_um: effective pixel size in µm/px after any resizing.
+                       If provided, area is reported in µm² and lengths in µm.
+                       If None, measurements remain in pixels.
     """
     print("  Computing morphometrics ...")
     morph_df = compute_morphometrics(labels)
@@ -78,6 +85,24 @@ def compute_features(labels: np.ndarray) -> pd.DataFrame:
 
     print("  Merging ...")
     df = morph_df.merge(wall_df, on="label", how="left")
+
+    # Convert to physical units if pixel size is known
+    if pixel_size_um is not None:
+        px2 = pixel_size_um ** 2  # µm² per px²
+        
+        # Area: px² → µm²
+        df["area"] = df["area"] * px2
+        df["equivalent_diameter"] = df["equivalent_diameter"] * pixel_size_um
+        df["major_axis_length"] = df["major_axis_length"] * pixel_size_um
+        df["minor_axis_length"] = df["minor_axis_length"] * pixel_size_um
+        df["wall_thickness"] = df["wall_thickness"] * pixel_size_um
+        
+        df["pixel_size_um"] = pixel_size_um
+        df["units"] = "um"
+        print(f"  Converted to physical units (pixel size: {pixel_size_um:.4f} µm/px)")
+    else:
+        df["pixel_size_um"] = None
+        df["units"] = "px"
+        print("  WARNING: No pixel size provided — measurements in pixels")
+
     return df
-
-
