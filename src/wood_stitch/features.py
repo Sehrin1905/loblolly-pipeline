@@ -33,34 +33,37 @@ def compute_morphometrics(labels: np.ndarray) -> pd.DataFrame:
 
 def compute_wall_thickness(labels: np.ndarray) -> pd.DataFrame:
     """
-    Estimate per-cell wall thickness using a distance-transform trick.
-    Walls are the space between lumens — Cellpose doesn't segment them directly.
-
-    1. distance_transform_edt(~lumen_mask) gives, at every wall pixel,
-       the distance to the nearest lumen edge.
-    2. maximum_filter pushes that distance one pixel inward so each lumen's
-       boundary pixels pick up the wall distance just outside them.
-    3. Group by label and average to get a per-cell wall thickness estimate.
+    Estimate per-cell wall thickness.
+    
+    For each lumen, measures the mean distance from its outer boundary pixels
+    to the nearest pixel of any other lumen. This is the actual wall thickness
+    separating adjacent cells.
     """
-    lumen_mask = labels > 0
+    from scipy.ndimage import binary_dilation, distance_transform_edt
 
-    # Distance from every background (wall) pixel to nearest lumen
-    dist = distance_transform_edt(~lumen_mask)
+    all_lumens = labels > 0
+    results = []
 
-    # Push the distance value 1px inward into the lumen boundary
-    dist_dilated = maximum_filter(dist, size=3)
+    for label in np.unique(labels[labels > 0]):
+        lumen = labels == label
 
-    # Only keep values right at lumen boundaries
-    boundary_vals = np.where(lumen_mask, dist_dilated, 0)
+        # Get 1px outer boundary just outside this lumen
+        dilated = binary_dilation(lumen)
+        outer_boundary = dilated & ~lumen & ~all_lumens
 
-    df = pd.DataFrame({
-        "label": labels[lumen_mask],
-        "wall_dist": boundary_vals[lumen_mask]
-    })
+        if not outer_boundary.any():
+            continue
 
-    wall_thickness = df.groupby("label")["wall_dist"].mean().reset_index()
-    wall_thickness = wall_thickness.rename(columns={"wall_dist": "wall_thickness"})
-    return wall_thickness
+        # Distance from outer boundary to nearest other lumen
+        other_lumens = all_lumens & ~lumen
+        if not other_lumens.any():
+            continue
+
+        dist_to_other = distance_transform_edt(~other_lumens)
+        wall_thickness = dist_to_other[outer_boundary].mean()
+        results.append({"label": int(label), "wall_thickness": wall_thickness})
+
+    return pd.DataFrame(results)
 
 
 def compute_features(labels: np.ndarray) -> pd.DataFrame:
