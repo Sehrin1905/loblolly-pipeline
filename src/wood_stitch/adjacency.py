@@ -1,39 +1,64 @@
 # src/wood_stitch/adjacency.py
 import numpy as np
 import pandas as pd
+from scipy.ndimage import binary_dilation
 
 
-def compute_adjacency(labels: np.ndarray) -> pd.DataFrame:
+def compute_adjacency(labels: np.ndarray,
+                      dilation_radius: int = 3) -> pd.DataFrame:
     """
-    Find all pairs of adjacent cell lumens and the length of their shared boundary.
-    Fully vectorized — no per-cell loops.
+    Find all pairs of neighboring cell lumens separated by walls.
 
-    Returns a DataFrame with columns: label_a, label_b, boundary_length_px
+    Uses dilation-based proximity — expands each lumen by dilation_radius
+    pixels and finds which other lumens it overlaps with. This correctly
+    detects neighbors across cell walls, unlike direct pixel contact.
+
+    Args:
+        labels: (H, W) int32 label map from segmentation
+        dilation_radius: how many pixels to dilate each lumen (should be
+                        slightly larger than typical wall thickness)
+
+    Returns a DataFrame with columns: label_a, label_b, contact_length_px
     """
-    print("  Finding horizontal adjacencies ...")
-    # Compare each pixel to its right neighbor
-    left = labels[:, :-1]
-    right = labels[:, 1:]
-    h_mask = (left != right) & (left > 0) & (right > 0)
-    h_pairs = np.stack([left[h_mask], right[h_mask]], axis=1)
+    from scipy.ndimage import generate_binary_structure
 
-    print("  Finding vertical adjacencies ...")
-    # Compare each pixel to its neighbor below
-    top = labels[:-1, :]
-    bottom = labels[1:, :]
-    v_mask = (top != bottom) & (top > 0) & (bottom > 0)
-    v_pairs = np.stack([top[v_mask], bottom[v_mask]], axis=1)
+    print(f"  Computing adjacency with dilation radius {dilation_radius}px ...")
 
-    print("  Combining ...")
-    all_pairs = np.concatenate([h_pairs, v_pairs], axis=0)
+    unique_labels = np.unique(labels[labels > 0])
+    struct = generate_binary_structure(2, 1)  # 4-connectivity structuring element
 
-    # Sort each pair so (a,b) and (b,a) are treated the same
-    all_pairs = np.sort(all_pairs, axis=1)
+    # Build dilation structuring element of given radius
+    from skimage.morphology import disk
+    selem = disk(dilation_radius)
 
-    print("  Counting boundary lengths ...")
-    df = pd.DataFrame(all_pairs, columns=["label_a", "label_b"])
-    edge_df = df.groupby(["label_a", "label_b"]).size().reset_index(name="boundary_length_px")
+    pairs = []
 
+    # Dilate each lumen and find which other lumens it overlaps
+    for label in unique_labels:
+        lumen = labels == label
+        dilated = binary_dilation(lumen, structure=selem)
+
+        # Find all other labels that overlap with the dilated lumen
+        overlap = labels[dilated & ~lumen]
+        neighbors = np.unique(overlap[overlap > 0])
+
+        for neighbor in neighbors:
+            if neighbor > label:  # avoid duplicates
+                # Contact length = number of overlapping pixels
+                neighbor_mask = labels == neighbor
+                contact = (dilated & neighbor_mask).sum()
+                pairs.append({
+                    "label_a": int(label),
+                    "label_b": int(neighbor),
+                    "contact_length_px": int(contact)
+                })
+
+    if not pairs:
+        print("  WARNING: No adjacent pairs found")
+        return pd.DataFrame(columns=["label_a", "label_b", "contact_length_px"])
+
+    edge_df = pd.DataFrame(pairs)
+    print(f"  Found {len(edge_df)} adjacent pairs")
     return edge_df
 
 
@@ -47,4 +72,3 @@ def count_neighbors(edge_df: pd.DataFrame) -> pd.DataFrame:
     return neighbor_counts.reset_index().rename(
         columns={"index": "label", 0: "n_neighbors"}
     )
-
