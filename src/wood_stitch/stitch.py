@@ -46,7 +46,8 @@ def load_tiles(tile_dir: str) -> tuple[list[tuple[str, object]], float | None]:
 def stitch(tile_dir: str, out_path: str = "mosaic.tif") -> None:
     print("Loading tiles …")
     tiles, pixel_size = load_tiles(tile_dir)
-    print(f"  {len(tiles)} tiles found")
+    n_tiles_loaded = len(tiles)
+    print(f"  {n_tiles_loaded} tiles found")
 
     if pixel_size:
         print(f"  Pixel size from metadata: {pixel_size:.6f} µm/px")
@@ -54,12 +55,27 @@ def stitch(tile_dir: str, out_path: str = "mosaic.tif") -> None:
         print("  WARNING: No pixel size found in tile metadata")
 
     images = [img for _, img in tiles]
+    names = [name for name, _ in tiles]
 
     print("Stitching …")
     stitcher = cv2.Stitcher.create(cv2.Stitcher_SCANS)
     status, mosaic = stitcher.stitch(images)
 
     if status == cv2.Stitcher_OK:
+        # Check how many tiles were actually used
+        # OpenCV stitcher may silently drop disconnected tiles
+        n_tiles_used = stitcher.component()
+        if hasattr(n_tiles_used, '__len__'):
+            n_used = len(n_tiles_used)
+            if n_used < n_tiles_loaded:
+                excluded = [names[i] for i in range(n_tiles_loaded) 
+                           if i not in list(n_tiles_used)]
+                print(f"  WARNING: {n_tiles_loaded - n_used} tiles excluded from mosaic!")
+                for name in excluded:
+                    print(f"    Excluded: {name}")
+            else:
+                print(f"  All {n_used} tiles used in mosaic")
+
         cv2.imwrite(out_path, mosaic)
         print(f"  Saved → {out_path}  ({mosaic.shape[1]}×{mosaic.shape[0]} px)")
 
@@ -69,7 +85,7 @@ def stitch(tile_dir: str, out_path: str = "mosaic.tif") -> None:
             "tile_pixel_size_um_per_px": pixel_size,
             "mosaic_width_px": mosaic.shape[1],
             "mosaic_height_px": mosaic.shape[0],
-            "n_tiles": len(tiles),
+            "n_tiles_loaded": n_tiles_loaded,
             "resize_factor": 1.0,
             "effective_pixel_size_um_per_px": pixel_size,
             "notes": "resize_factor updated if mosaic is resized after stitching"
@@ -81,3 +97,4 @@ def stitch(tile_dir: str, out_path: str = "mosaic.tif") -> None:
 
     else:
         print(f"  Stitching failed with status code: {status}")
+        raise RuntimeError(f"Stitching failed with status code: {status}")
