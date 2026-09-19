@@ -19,14 +19,13 @@ df = pd.read_csv("data/all_samples.csv")
 
 # Parse sample metadata from folder name
 def parse_sample(name):
-    # e.g. Marsh_1_Recent, Reference_851_Old, RETRY_Reference_801_Old
-    name = name.replace("RETRY_", "")
+    name = name.replace("RETRY_", "").replace("***", "")
     parts = name.split("_")
-    if parts[0] in ("Marsh", "Far"):
+    if parts[0].lower() in ("marsh", "far"):
         site = "Marsh"
     else:
         site = "Reference"
-    period = parts[-1].capitalize()  # normalize Recent/RECENT/recent → Recent
+    period = parts[-1].capitalize()  # normalizes OLD/RECENT/Old/Recent
     return site, period
 
 df[["site", "period"]] = df["sample"].apply(
