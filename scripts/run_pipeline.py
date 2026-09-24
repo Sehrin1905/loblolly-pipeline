@@ -111,7 +111,7 @@ def upload_to_r2(client, bucket: str, local_path: Path, r2_key: str) -> None:
     client.upload_file(str(local_path), bucket, r2_key)
 
 
-def upload_sample_outputs(client, bucket: str, sample_name: str, sample_dir: Path) -> None:
+def upload_sample_outputs(client, bucket: str, sample_name: str, sample_dir: Path, run_id: str) -> None:
     """Upload all pipeline outputs for a sample to R2."""
     output_files = [
         "mosaic.tif",
