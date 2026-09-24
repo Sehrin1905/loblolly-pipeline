@@ -40,3 +40,4 @@ echo "Starting pipeline..."
 uv run scripts/run_pipeline.py --config config.toml
 
 echo "Job finished: $(date)"
+EOF
