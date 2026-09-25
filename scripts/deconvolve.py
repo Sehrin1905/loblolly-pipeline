@@ -1,37 +1,31 @@
-# /// script
-# requires-python = ">=3.13"
-# dependencies = ["opencv-python", "numpy"]
-# ///
-"""
-Separate safranin and astra blue stains via Macenko color deconvolution.
-
-Usage:
-    uv run scripts/deconvolve.py <mosaic_path>
-"""
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+"""Experimental RGB unmixing; components are NOT validated safranin/astra-blue concentrations."""
 
 import argparse
-import cv2
-import os
+from pathlib import Path
+from wood_stitch.image_io import read_image, write_image
+from wood_stitch.artifacts import write_json
 from wood_stitch.deconvolve import deconvolve
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mosaic_path")
-    args = ap.parse_args()
-
-    print(f"Loading {args.mosaic_path} ...")
-    img = cv2.imread(args.mosaic_path)
-
-    print("Running deconvolution ...")
-    results = deconvolve(img)
-
-    out_dir = os.path.dirname(args.mosaic_path)
-    for key in ("safranin", "astra_blue", "residual"):
-        channel = results[key]
-        normalized = cv2.normalize(channel, None, 0, 255, cv2.NORM_MINMAX)
-        out_path = os.path.join(out_dir, f"{key}.png")
-        cv2.imwrite(out_path, normalized.astype(np.uint8))
-        print(f"Saved → {out_path}")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("image")
+    parser.add_argument("output_dir", type=Path)
+    args = parser.parse_args()
+    image, scale = read_image(args.image)
+    results = deconvolve(image[..., ::-1])  # explicitly RGB
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    for key in ("component_1", "component_2", "residual"):
+        write_image(
+            args.output_dir / f"{key}.ome.tif",
+            results[key],
+            scale,
+            {"interpretation": "experimental unmixing component; biochemical identity unvalidated"},
+        )
+    write_json(
+        args.output_dir / "unmixing.json",
+        {
+            "vectors": results["stain_vectors"].tolist(),
+            "input_color_order": "RGB",
+            "quantitative_stain_validation": "not established",
+        },
+    )
