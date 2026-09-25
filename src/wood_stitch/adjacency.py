@@ -1,74 +1,48 @@
-# src/wood_stitch/adjacency.py
+"""Undirected lumen proximity edges; no inferred wall-interface length."""
+
+import math
 import numpy as np
 import pandas as pd
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, find_objects
+from .features import validate_labels
+from .image_io import validate_scale
 
 
-def compute_adjacency(labels: np.ndarray,
-                      dilation_radius: int = 3) -> pd.DataFrame:
-    """
-    Find all pairs of neighboring cell lumens separated by walls.
-
-    Uses dilation-based proximity — expands each lumen by dilation_radius
-    pixels and finds which other lumens it overlaps with. This correctly
-    detects neighbors across cell walls, unlike direct pixel contact.
-
-    Args:
-        labels: (H, W) int32 label map from segmentation
-        dilation_radius: how many pixels to dilate each lumen (should be
-                        slightly larger than typical wall thickness)
-
-    Returns a DataFrame with columns: label_a, label_b, contact_length_px
-    """
-    from scipy.ndimage import generate_binary_structure
-
-    print(f"  Computing adjacency with dilation radius {dilation_radius}px ...")
-
-    unique_labels = np.unique(labels[labels > 0])
-    struct = generate_binary_structure(2, 1)  # 4-connectivity structuring element
-
-    # Build dilation structuring element of given radius
-    from skimage.morphology import disk
-    selem = disk(dilation_radius)
-
-    pairs = []
-
-    # Dilate each lumen and find which other lumens it overlaps
-    for label in unique_labels:
-        lumen = labels == label
-        dilated = binary_dilation(lumen, structure=selem)
-
-        # Find all other labels that overlap with the dilated lumen
-        overlap = labels[dilated & ~lumen]
-        neighbors = np.unique(overlap[overlap > 0])
-
-        for neighbor in neighbors:
-            if neighbor > label:  # avoid duplicates
-                # Contact length = number of overlapping pixels
-                neighbor_mask = labels == neighbor
-                contact = (dilated & neighbor_mask).sum()
-                pairs.append({
-                    "label_a": int(label),
-                    "label_b": int(neighbor),
-                    "contact_length_px": int(contact)
-                })
-
-    if not pairs:
-        print("  WARNING: No adjacent pairs found")
-        return pd.DataFrame(columns=["label_a", "label_b", "contact_length_px"])
-
-    edge_df = pd.DataFrame(pairs)
-    print(f"  Found {len(edge_df)} adjacent pairs")
-    return edge_df
+def compute_adjacency(labels, *, radius_um, pixel_size_um):
+    validate_labels(labels)
+    sx, sy = validate_scale(pixel_size_um)
+    if not math.isfinite(radius_um) or radius_um <= 0:
+        raise ValueError("Proximity radius must be positive and finite")
+    rx, ry = math.ceil(radius_um / sx), math.ceil(radius_um / sy)
+    if max(rx, ry) > 64:
+        raise ValueError("Proximity radius exceeds 64 pixels; use an explicitly reviewed spatial method")
+    yy, xx = np.ogrid[-ry : ry + 1, -rx : rx + 1]
+    structure = (xx * sx) ** 2 + (yy * sy) ** 2 <= radius_um**2 + 1e-12
+    # Relabel sparse IDs before find_objects so an arbitrary high label cannot allocate huge lists.
+    ids, inverse = np.unique(labels, return_inverse=True)
+    dense = inverse.reshape(labels.shape).astype(np.int32) + 1
+    dense[labels == 0] = 0
+    pairs = set()
+    for dense_id, box in enumerate(find_objects(dense), 1):
+        if box is None:
+            continue
+        label = int(ids[dense_id - 1])
+        if label == 0:
+            continue
+        y, x = box
+        roi = labels[
+            max(0, y.start - ry) : min(labels.shape[0], y.stop + ry),
+            max(0, x.start - rx) : min(labels.shape[1], x.stop + rx),
+        ]
+        expanded = binary_dilation(roi == label, structure=structure)
+        for other in np.unique(roi[expanded]):
+            if other > label:
+                pairs.add((label, int(other)))
+    return pd.DataFrame(sorted(pairs), columns=["label_a", "label_b"])
 
 
-def count_neighbors(edge_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Count how many neighbors each cell has, from the edge list.
-    """
-    a_counts = edge_df.groupby("label_a").size()
-    b_counts = edge_df.groupby("label_b").size()
-    neighbor_counts = a_counts.add(b_counts, fill_value=0).astype(int)
-    return neighbor_counts.reset_index().rename(
-        columns={"index": "label", 0: "n_neighbors"}
-    )
+def count_neighbors(edge_df, labels=None):
+    counts = pd.concat([edge_df["label_a"], edge_df["label_b"]]).value_counts()
+    if labels is not None:
+        counts = counts.reindex(np.unique(labels[labels > 0]), fill_value=0)
+    return counts.rename_axis("label").rename("n_neighbors").reset_index()

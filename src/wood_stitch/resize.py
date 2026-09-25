@@ -1,47 +1,25 @@
-import cv2
-import json
+"""Create a separate calibrated analysis image, preserving the full-resolution source."""
+
 from pathlib import Path
+import math
+import cv2
+from .image_io import read_image, write_image, read_annotations
 
 
-def resize_mosaic(mosaic_path: str, factor: float) -> None:
-    """
-    Resize a mosaic and update its metadata.json with the new effective pixel size.
-    
-    Args:
-        mosaic_path: path to mosaic.tif
-        factor: resize factor (e.g. 0.5 for 50%, 0.25 for 25%)
-    """
-    mosaic_path = Path(mosaic_path)
-    out_dir = mosaic_path.parent
-    meta_path = out_dir / "metadata.json"
-
-    print(f"Loading {mosaic_path} ...")
-    img = cv2.imread(str(mosaic_path))
-    print(f"  Original size: {img.shape[1]}×{img.shape[0]} px")
-
-    print(f"  Resizing by factor {factor} ...")
-    resized = cv2.resize(img, (0, 0), fx=factor, fy=factor)
-    cv2.imwrite(str(mosaic_path), resized)
-    print(f"  New size: {resized.shape[1]}×{resized.shape[0]} px")
-
-    # Update metadata
-    if meta_path.exists():
-        with open(meta_path) as f:
-            metadata = json.load(f)
-
-        # Accumulate resize factors
-        old_factor = metadata.get("resize_factor", 1.0)
-        new_factor = old_factor * factor
-        tile_pixel_size = metadata.get("tile_pixel_size_um_per_px")
-
-        metadata["resize_factor"] = new_factor
-        metadata["mosaic_width_px"] = resized.shape[1]
-        metadata["mosaic_height_px"] = resized.shape[0]
-        if tile_pixel_size:
-            metadata["effective_pixel_size_um_per_px"] = tile_pixel_size / new_factor
-
-        with open(meta_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        print(f"  Metadata updated → effective pixel size: {metadata.get('effective_pixel_size_um_per_px', 'unknown'):.4f} µm/px")
-    else:
-        print("  WARNING: No metadata.json found — pixel size not tracked")
+def resize_mosaic(mosaic_path, factor, out_path=None, *, provenance=None):
+    if not math.isfinite(factor) or not 0 < factor <= 1:
+        raise ValueError("Analysis resize factor must be in (0, 1]")
+    source = Path(mosaic_path)
+    target = Path(out_path) if out_path else source.with_name("analysis.ome.tif")
+    if target.resolve() == source.resolve():
+        raise ValueError("Resize output must differ from the full-resolution source")
+    image, (sx, sy) = read_image(source)
+    height, width = image.shape[:2]
+    shape = (max(1, round(width * factor)), max(1, round(height * factor)))
+    resized = cv2.resize(image, shape, interpolation=cv2.INTER_AREA) if shape != (width, height) else image
+    scale = (sx * width / shape[0], sy * height / shape[1])
+    if provenance is None:
+        provenance = read_annotations(source)
+        provenance["standalone_resize"] = {"factor": factor, "effective_pixel_size_um": list(scale)}
+    write_image(target, resized, scale, provenance)
+    return target
