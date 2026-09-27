@@ -316,8 +316,7 @@ def main():
 
         # Upload outputs to R2
         log.info(f"Uploading {sample_name} outputs to R2 ...")
-        upload_sample_outputs(client, bucket, sample_name, sample_dir)
-
+        upload_sample_outputs(client, bucket, sample_name, sample_dir, run_id)
     log.info("\n🎉 Pipeline complete!")
 
 
