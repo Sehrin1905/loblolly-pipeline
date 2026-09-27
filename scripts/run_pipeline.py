@@ -316,9 +316,10 @@ def main():
 
         # Upload outputs to R2
         log.info(f"Uploading {sample_name} outputs to R2 ...")
-        upload_sample_outputs(client, bucket, sample_name, sample_dir, run_id)
+        upload_sample_outputs(client, bucket, sample_name, sample_dir)
+
     log.info("\n🎉 Pipeline complete!")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -1,20 +1,14 @@
-# /// script
-# requires-python = ">=3.13"
-# dependencies = ["pandas"]
-# ///
 """
 Classify cells as tracheid, ray, or resin duct.
 
 Usage:
     uv run scripts/classify.py <features_path> <out_path>
 """
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import argparse
 import pandas as pd
 from wood_stitch.classify import classify_cells
+from wood_stitch.artifacts import write_csv
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
@@ -28,5 +22,5 @@ if __name__ == "__main__":
     print("Classifying cells ...")
     df = classify_cells(df)
 
-    df.to_csv(args.out_path, index=False)
+    write_csv(args.out_path, df)
     print(f"Saved → {args.out_path}")

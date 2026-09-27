@@ -1,19 +1,23 @@
 [cache]
-# Local directory where R2 data will be synced to
-# On Pegasus use your scratch directory e.g. /scratch/shossain/loblolly-cache
-local_cache_dir = "/scratch/loblolly-cache"
+# Override with a user-owned scratch directory on Pegasus.
+local_cache_dir = "data/cache"
 
 [pipeline]
-# Process these samples (leave empty to process all)
+# Start with one explicitly named sample. Empty selects all validated manifests.
 samples = []
-
-# Resize factor for mosaics before segmentation
 mosaic_resize_factor = 0.5
+# Guardrails, not measured peak-RAM requirements. Additional workspaces need more RAM.
+max_input_gb = 2.0
+max_analysis_pixels = 25000000
+# Optional proximity graph, not cell-wall adjacency or interface lengths.
+# adjacency_radius_um = 1.0
+# Explicit, reviewed biology; needed for comparative plots. See samples.example.json.
+# sample_registry = "samples.json"
 
 [cellpose]
-# Use GPU if available
-use_gpu = true
-# diameter is optional - omit to auto-detect, or set a number e.g. 30.0
+device = "auto" # cpu, mps, cuda, or auto; the resolved device is recorded
+model = "cpsam_v2"
+# Optional rescaling diameter in analysis-image pixels; omission uses the model's native scale.
 # diameter = 30.0
 
 [r2]

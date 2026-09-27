@@ -10,3 +10,12 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+logs/
+pipeline.log
+samples.json

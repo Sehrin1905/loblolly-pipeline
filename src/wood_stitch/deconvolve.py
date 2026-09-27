@@ -1,16 +1,15 @@
 # src/wood_stitch/deconvolve.py
 import numpy as np
-import cv2
 
-# No published stain vectors exist for safranin/astra blue — 
-# we have to estimate them from the image using Macenko method.
+# Exploratory components only: biochemical identities need reference stain regions.
+
 
 def rgb_to_od(img: np.ndarray, beta: float = 0.15) -> np.ndarray:
     """
     Convert RGB image to optical density (OD) space.
     Clips to avoid log(0).
     """
-    img = img.astype(np.float64) / 255.0
+    img = img.astype(np.float32) / 255.0
     img = np.clip(img, 1e-6, 1.0)
     od = -np.log(img)
     # Remove background pixels (low OD = bright = no stain)
@@ -18,12 +17,10 @@ def rgb_to_od(img: np.ndarray, beta: float = 0.15) -> np.ndarray:
     return od
 
 
-def estimate_stain_vectors_macenko(od: np.ndarray,
-                                   alpha: float = 1.0,
-                                   beta: float = 0.15) -> np.ndarray:
+def estimate_stain_vectors_macenko(od: np.ndarray, alpha: float = 1.0, beta: float = 0.15) -> np.ndarray:
     """
     Estimate two stain vectors from OD image using Macenko PCA method.
-    Returns (2, 3) array: [safranin_vector, astra_blue_vector].
+    Returns (2, 3) array: [component_1_vector, component_2_vector].
     """
     # Flatten to (N, 3), keep only pixels with enough stain
     od_flat = od.reshape(-1, 3)
@@ -54,14 +51,15 @@ def estimate_stain_vectors_macenko(od: np.ndarray,
     v1 = v1 / np.linalg.norm(v1)
     v2 = v2 / np.linalg.norm(v2)
 
-    # Disambiguate: safranin absorbs more in blue channel (index 2)
-    # astra blue absorbs more in red channel (index 0)
-    if v1[2] < v2[2]:
-        safranin, astra_blue = v1, v2
+    # Deterministic ordering, not validated biochemical identification.
+    v1 *= 1 if v1.sum() >= 0 else -1
+    v2 *= 1 if v2.sum() >= 0 else -1
+    if v1[2] > v2[2]:
+        component_1, component_2 = v1, v2
     else:
-        safranin, astra_blue = v2, v1
+        component_1, component_2 = v2, v1
 
-    return np.array([safranin, astra_blue])
+    return np.array([component_1, component_2])
 
 
 def build_unmixing_matrix(stain_vectors: np.ndarray) -> np.ndarray:
@@ -73,53 +71,56 @@ def build_unmixing_matrix(stain_vectors: np.ndarray) -> np.ndarray:
     s2 = stain_vectors[1]
     # Residual = cross product of the two stain vectors
     residual = np.cross(s1, s2)
+    if np.linalg.norm(residual) < 1e-4:
+        raise ValueError("Estimated stain vectors are degenerate")
     residual = residual / np.linalg.norm(residual)
     stain_matrix = np.array([s1, s2, residual])
+    if np.linalg.cond(stain_matrix) > 1e4:
+        raise ValueError("Estimated stain matrix is ill-conditioned")
     return np.linalg.inv(stain_matrix.T)
 
 
-def separate_stains(od: np.ndarray,
-                    unmixing_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def separate_stains(od: np.ndarray, unmixing_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Apply unmixing matrix to OD image.
-    Returns (safranin, astra_blue, residual) concentration maps.
+    Returns (component_1, component_2, residual) concentration maps.
     """
     h, w, _ = od.shape
     od_flat = od.reshape(-1, 3)
     concentrations = (unmixing_matrix @ od_flat.T).T
     concentrations = np.clip(concentrations, 0, None)
     concentrations = concentrations.reshape(h, w, 3)
-    safranin  = concentrations[:, :, 0]
-    astra_blue = concentrations[:, :, 1]
-    residual  = concentrations[:, :, 2]
-    return safranin, astra_blue, residual
+    component_1 = concentrations[:, :, 0]
+    component_2 = concentrations[:, :, 1]
+    residual = concentrations[:, :, 2]
+    return component_1, component_2, residual
 
 
 def deconvolve(img: np.ndarray) -> dict[str, np.ndarray]:
     """
     Full pipeline: RGB image → separated stain concentration maps.
-    Returns dict with keys: 'od', 'safranin', 'astra_blue', 'residual', 'stain_vectors'
+    Returns dict with keys: 'od', 'component_1', 'component_2', 'residual', 'stain_vectors'
     """
     print("  Converting to optical density ...")
     od = rgb_to_od(img)
 
     print("  Estimating stain vectors (Macenko) ...")
-    stain_vectors = estimate_stain_vectors_macenko(od)
-    print(f"    Safranin vector:   {stain_vectors[0].round(4)}")
-    print(f"    Astra blue vector: {stain_vectors[1].round(4)}")
+    flat = od.reshape(-1, 3)
+    stride = max(1, len(flat) // 100000)
+    stain_vectors = estimate_stain_vectors_macenko(flat[::stride].reshape(-1, 1, 3))
+    print(f"    Component 1 vector:   {stain_vectors[0].round(4)}")
+    print(f"    Component 2 vector: {stain_vectors[1].round(4)}")
 
     print("  Building unmixing matrix ...")
     unmixing_matrix = build_unmixing_matrix(stain_vectors)
 
     print("  Separating stains ...")
-    safranin, astra_blue, residual = separate_stains(od, unmixing_matrix)
+    component_1, component_2, residual = separate_stains(od, unmixing_matrix)
 
     return {
         "od": od,
-        "safranin": safranin,
-        "astra_blue": astra_blue,
+        "component_1": component_1,
+        "component_2": component_2,
         "residual": residual,
-        "stain_vectors": stain_vectors
+        "stain_vectors": stain_vectors,
     }
-
-

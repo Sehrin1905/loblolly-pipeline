@@ -1,100 +1,80 @@
-import cv2
-import json
-import re
+"""Strict calibrated stitching: every declared tile must be used."""
+
 from pathlib import Path
-from PIL import Image
+import cv2
+import numpy as np
+from .artifacts import write_json
+from .image_io import tiff_info, read_image, write_image
+from .storage import is_sidecar
 
 
-def read_pixel_size(tile_path: Path) -> float | None:
-    """
-    Extract physical pixel size (µm/px) from OME-TIFF metadata.
-    Returns None if not found.
-    """
-    try:
-        img = Image.open(str(tile_path))
-        xml = img.tag_v2.get(270, "")
-        match = re.search(r'PhysicalSizeX="([^"]+)"', xml)
-        if match:
-            return float(match.group(1))
-    except Exception:
-        pass
-    return None
+def read_pixel_size(path):
+    info = tiff_info(path)
+    if not np.isclose(info["pixel_size_x_um"], info["pixel_size_y_um"]):
+        raise ValueError("Scalar calibration requested for anisotropic pixels")
+    return info["pixel_size_x_um"]
 
 
-def load_tiles(tile_dir: str) -> tuple[list[tuple[str, object]], float | None]:
-    """
-    Load all tile images from a directory.
-    Returns (tiles, pixel_size_um_per_px).
-    """
-    tile_dir = Path(tile_dir)
-    tiles = []
-    pixel_size = None
-
-    for ext in ("*.tif", "*.tiff", "*.png", "*.jpg"):
-        for path in sorted(tile_dir.glob(ext)):
-            img = cv2.imread(str(path))
-            if img is not None:
-                tiles.append((path.name, img))
-                print(f"  Loaded {path.name}")
-                # Read pixel size from first tile only
-                if pixel_size is None:
-                    pixel_size = read_pixel_size(path)
-
-    return tiles, pixel_size
+def tile_paths(directory):
+    return sorted(
+        p
+        for p in Path(directory).rglob("*")
+        if p.is_file() and p.suffix.lower() in (".tif", ".tiff") and not is_sidecar(p.as_posix())
+    )
 
 
-def stitch(tile_dir: str, out_path: str = "mosaic.tif") -> None:
-    print("Loading tiles …")
-    tiles, pixel_size = load_tiles(tile_dir)
-    n_tiles_loaded = len(tiles)
-    print(f"  {n_tiles_loaded} tiles found")
-
-    if pixel_size:
-        print(f"  Pixel size from metadata: {pixel_size:.6f} µm/px")
+def stitch(tile_dir, out_path="mosaic.ome.tif", *, paths=None, max_input_gb=2.0, provenance=None):
+    paths = list(paths) if paths is not None else tile_paths(tile_dir)
+    if not paths:
+        raise ValueError("No TIFF tiles supplied")
+    infos = [tiff_info(p) for p in paths]
+    scales = [(i["pixel_size_x_um"], i["pixel_size_y_um"]) for i in infos]
+    if any(not np.allclose(s, scales[0], rtol=1e-6, atol=0) for s in scales):
+        raise ValueError("Tiles have inconsistent physical calibration")
+    if not np.isclose(*scales[0], rtol=1e-6, atol=0):
+        raise ValueError("Stitching anisotropic pixels needs a calibrated resampling step")
+    if any(i["dtype"] != "uint8" or len(i["shape"]) != 3 for i in infos):
+        raise ValueError("Stitching currently requires single-plane uint8 RGB TIFFs")
+    decoded_bytes = sum(int(np.prod(i["shape"])) for i in infos)
+    if decoded_bytes > max_input_gb * 1e9:
+        raise MemoryError(
+            f"Tiles alone need {decoded_bytes / 1e9:.2f} GB; input limit is {max_input_gb} GB. "
+            "Choose a smaller pilot or explicitly raise the limit on a profiled machine."
+        )
+    images = [read_image(p)[0] for p in paths]
+    coverage = {
+        "expected": [p.name for p in paths],
+        "input_files": [str(p) for p in paths],
+        "used": [],
+        "excluded": [],
+        "complete": False,
+        "transforms": [],
+    }
+    if len(images) == 1:
+        mosaic = images[0]
+        used = [0]
     else:
-        print("  WARNING: No pixel size found in tile metadata")
-
-    images = [img for _, img in tiles]
-    names = [name for name, _ in tiles]
-
-    print("Stitching …")
-    stitcher = cv2.Stitcher.create(cv2.Stitcher_SCANS)
-    status, mosaic = stitcher.stitch(images)
-
-    if status == cv2.Stitcher_OK:
-        # Check how many tiles were actually used
-        # OpenCV stitcher may silently drop disconnected tiles
-        n_tiles_used = stitcher.component()
-        if hasattr(n_tiles_used, '__len__'):
-            n_used = len(n_tiles_used)
-            if n_used < n_tiles_loaded:
-                excluded = [names[i] for i in range(n_tiles_loaded) 
-                           if i not in list(n_tiles_used)]
-                print(f"  WARNING: {n_tiles_loaded - n_used} tiles excluded from mosaic!")
-                for name in excluded:
-                    print(f"    Excluded: {name}")
-            else:
-                print(f"  All {n_used} tiles used in mosaic")
-
-        cv2.imwrite(out_path, mosaic)
-        print(f"  Saved → {out_path}  ({mosaic.shape[1]}×{mosaic.shape[0]} px)")
-
-        # Save metadata
-        out_dir = Path(out_path).parent
-        metadata = {
-            "tile_pixel_size_um_per_px": pixel_size,
-            "mosaic_width_px": mosaic.shape[1],
-            "mosaic_height_px": mosaic.shape[0],
-            "n_tiles_loaded": n_tiles_loaded,
-            "resize_factor": 1.0,
-            "effective_pixel_size_um_per_px": pixel_size,
-            "notes": "resize_factor updated if mosaic is resized after stitching"
-        }
-        meta_path = out_dir / "metadata.json"
-        with open(meta_path, "w") as f:
-            json.dump(metadata, f, indent=2)
-        print(f"  Metadata saved → {meta_path}")
-
-    else:
-        print(f"  Stitching failed with status code: {status}")
-        raise RuntimeError(f"Stitching failed with status code: {status}")
+        st = cv2.Stitcher.create(cv2.Stitcher_SCANS)
+        st.setCompositingResol(-1)  # do not silently downsample at rendering time
+        status, mosaic = st.stitch(images)
+        used = list(map(int, st.component())) if status == cv2.Stitcher_OK else []
+        for cam in st.cameras() if status == cv2.Stitcher_OK else []:
+            matrix = np.asarray(cam.R)
+            coverage["transforms"].append({"R": matrix.tolist(), "K": cam.K().tolist()})
+            singular = np.linalg.svd(matrix[:2, :2], compute_uv=False)
+            if not np.allclose(singular, 1.0, atol=0.01, rtol=0):
+                write_json(Path(out_path).with_name("coverage.json"), coverage)
+                raise ValueError(
+                    "Registration changes physical scale by more than 1%; review tile transforms"
+                )
+        if status != cv2.Stitcher_OK:
+            write_json(Path(out_path).with_name("coverage.json"), coverage)
+            raise RuntimeError(f"Stitching failed with status code {status}")
+    coverage["used"] = [paths[i].name for i in used]
+    coverage["excluded"] = [paths[i].name for i in range(len(paths)) if i not in used]
+    coverage["complete"] = len(used) == len(paths)
+    write_json(Path(out_path).with_name("coverage.json"), coverage)
+    if not coverage["complete"]:
+        raise ValueError(f"Incomplete mosaic: excluded tiles {coverage['excluded']}")
+    write_image(out_path, mosaic, scales[0], provenance)
+    return coverage

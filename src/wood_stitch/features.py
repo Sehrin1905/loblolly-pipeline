@@ -1,16 +1,23 @@
-# src/wood_stitch/features.py
+"""Calibrated lumen morphometrics. Wall thickness requires a validated wall model."""
+
 import numpy as np
 import pandas as pd
 from skimage.measure import regionprops_table
-from scipy.ndimage import distance_transform_edt, maximum_filter
+from .image_io import validate_scale
 
 
-def compute_morphometrics(labels: np.ndarray) -> pd.DataFrame:
-    """
-    Vectorized morphometric features for every labeled cell lumen.
-    """
+def validate_labels(labels):
+    if labels.ndim != 2 or labels.dtype.kind not in "iu" or np.any(labels < 0):
+        raise ValueError("Labels must be a nonnegative integer YX array")
+
+
+def compute_morphometrics(labels, pixel_size_um):
+    validate_labels(labels)
+    scale = (pixel_size_um, pixel_size_um) if np.isscalar(pixel_size_um) else pixel_size_um
+    sx, sy = validate_scale(scale)
     props = regionprops_table(
         labels,
+        spacing=(sy, sx),
         properties=(
             "label",
             "area",
@@ -20,89 +27,33 @@ def compute_morphometrics(labels: np.ndarray) -> pd.DataFrame:
             "orientation",
             "eccentricity",
             "solidity",
-            "equivalent_diameter",
-        )
+            "equivalent_diameter_area",
+        ),
     )
-    df = pd.DataFrame(props)
-    df = df.rename(columns={
-        "centroid-0": "centroid_y",
-        "centroid-1": "centroid_x",
-    })
+    df = pd.DataFrame(props).rename(
+        columns={
+            "area": "area_um2",
+            "centroid-0": "centroid_y_um",
+            "centroid-1": "centroid_x_um",
+            "major_axis_length": "major_axis_length_um",
+            "minor_axis_length": "minor_axis_length_um",
+            "orientation": "orientation_rad",
+            "equivalent_diameter_area": "equivalent_diameter_um",
+        }
+    )
+    df["area_px2"] = df["area_um2"] / (sx * sy)
+    df["centroid_x_px"] = df["centroid_x_um"] / sx
+    df["centroid_y_px"] = df["centroid_y_um"] / sy
+    df["pixel_size_x_um"] = sx
+    df["pixel_size_y_um"] = sy
     return df
 
 
-def compute_wall_thickness(labels: np.ndarray) -> pd.DataFrame:
-    """
-    Estimate per-cell wall thickness.
-    
-    For each lumen, measures the mean distance from its outer boundary pixels
-    to the nearest pixel of any other lumen. This is the actual wall thickness
-    separating adjacent cells.
-    """
-    from scipy.ndimage import binary_dilation, distance_transform_edt
-
-    all_lumens = labels > 0
-    results = []
-
-    for label in np.unique(labels[labels > 0]):
-        lumen = labels == label
-
-        # Get 1px outer boundary just outside this lumen
-        dilated = binary_dilation(lumen)
-        outer_boundary = dilated & ~lumen & ~all_lumens
-
-        if not outer_boundary.any():
-            continue
-
-        # Distance from outer boundary to nearest other lumen
-        other_lumens = all_lumens & ~lumen
-        if not other_lumens.any():
-            continue
-
-        dist_to_other = distance_transform_edt(~other_lumens)
-        wall_thickness = dist_to_other[outer_boundary].mean()
-        results.append({"label": int(label), "wall_thickness": wall_thickness})
-
-    return pd.DataFrame(results)
+def compute_wall_thickness(labels):
+    raise NotImplementedError("Lumen spacing is not wall thickness; this unvalidated metric was removed")
 
 
-def compute_features(labels: np.ndarray,
-                     pixel_size_um: float | None = None) -> pd.DataFrame:
-    """
-    Full per-cell feature table: morphometrics + wall thickness.
-    
-    Args:
-        labels: (H, W) int32 label map from segmentation
-        pixel_size_um: effective pixel size in µm/px after any resizing.
-                       If provided, area is reported in µm² and lengths in µm.
-                       If None, measurements remain in pixels.
-    """
-    print("  Computing morphometrics ...")
-    morph_df = compute_morphometrics(labels)
-
-    print("  Computing wall thickness ...")
-    wall_df = compute_wall_thickness(labels)
-
-    print("  Merging ...")
-    df = morph_df.merge(wall_df, on="label", how="left")
-
-    # Convert to physical units if pixel size is known
-    if pixel_size_um is not None:
-        px2 = pixel_size_um ** 2  # µm² per px²
-        
-        # Area: px² → µm²
-        df["area"] = df["area"] * px2
-        df["equivalent_diameter"] = df["equivalent_diameter"] * pixel_size_um
-        df["major_axis_length"] = df["major_axis_length"] * pixel_size_um
-        df["minor_axis_length"] = df["minor_axis_length"] * pixel_size_um
-        df["wall_thickness"] = df["wall_thickness"] * pixel_size_um
-        
-        df["pixel_size_um"] = pixel_size_um
-        df["units"] = "um"
-        print(f"  Converted to physical units (pixel size: {pixel_size_um:.4f} µm/px)")
-    else:
-        df["pixel_size_um"] = None
-        df["units"] = "px"
-        print("  WARNING: No pixel size provided — measurements in pixels")
-
-    return df
+def compute_features(labels, pixel_size_um=None):
+    if pixel_size_um is None:
+        raise ValueError("Physical X/Y calibration is required for quantitative features")
+    return compute_morphometrics(labels, pixel_size_um)

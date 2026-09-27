@@ -8,36 +8,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:v100:1
-#SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=your_email@gwu.edu
 
-# ── Environment setup ─────────────────────────────────────────────────────────
-echo "Job started: $(date)"
-echo "Running on: $(hostname)"
-echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo 'No GPU')"
-
-# Load modules (adjust for Pegasus module system)
-module load python/3.13
-module load cuda/11.8
-
-# Go to repo
-cd $SLURM_SUBMIT_DIR
-
-# Install uv if not available
-if ! command -v uv &> /dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    source ~/.bashrc
-fi
-
-# Install dependencies
-uv sync
-
-# Create logs directory
-mkdir -p logs
-
-# Run pipeline
-echo "Starting pipeline..."
-uv run scripts/run_pipeline.py --config config.toml
-
-echo "Job finished: $(date)"
-EOF
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:?Submit from the repository root}"
+# Before submission: load site-approved modules, install uv, and create logs/.
+# The locked torch wheel contains its CUDA runtime. Do not assume a CUDA module repairs a wheel.
+command -v uv >/dev/null
+uv sync --locked --extra inference
+uv run --locked --extra inference python scripts/check_device.py --device cuda
+uv run --locked --extra inference python scripts/run_pipeline.py --config "${LOBLOLLY_CONFIG:-config.toml}"
