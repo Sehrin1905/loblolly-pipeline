@@ -4,8 +4,8 @@ local_cache_dir = "data/cache"
 
 [pipeline]
 # Start with one explicitly named sample. Empty selects all validated manifests.
-samples = []
-mosaic_resize_factor = 0.5
+samples = ["REF_636_RECENT"]
+mosaic_resize_factor = 1.0
 # Guardrails, not measured peak-RAM requirements. Additional workspaces need more RAM.
 max_input_gb = 2.0
 max_analysis_pixels = 25000000
