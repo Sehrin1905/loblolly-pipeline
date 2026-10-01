@@ -1,0 +1,18 @@
+[cache]
+# Replace with a user-owned Pegasus scratch directory before submission.
+local_cache_dir = "/scratch/shossain/loblolly-cache/loblolly-cache"
+
+[pipeline]
+samples = ["REF_636_RECENT"]
+mosaic_resize_factor = 1.0
+max_input_gb = 2.0
+# REF_636_RECENT mosaic is 8164 x 14096 = 115,079,744 pixels.
+# This is a policy guard, not a measured memory guarantee.
+max_analysis_pixels = 120000000
+
+[cellpose]
+device = "cuda"
+model = "cpsam_v2"
+
+[r2]
+bucket_name = "sehrin-image-stitching"

@@ -2,6 +2,7 @@
 #local_cache_dir is set via LOBLOLLY_CACHE_DIR environment variable at runtime
 #On Pegasus: export LOBLOLLY_CACHE_DIR=/scratch/shossain/loblolly-cache
 #On Mac: export LOBLOLLY_CACHE_DIR=/tmp/loblolly-cache
+
 [pipeline]
 # Start with one explicitly named sample. Empty selects all validated manifests.
 samples = ["REF_636_RECENT"]

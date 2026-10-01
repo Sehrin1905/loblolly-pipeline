@@ -77,8 +77,8 @@ def validate_config(cfg):
     for section, values in cfg.items():
         if section not in allowed or not isinstance(values, dict) or set(values) - allowed[section]:
             raise ValueError(f"Unknown configuration in {section}; migrate using config.toml")
-    if not cfg.get("r2", {}).get("bucket_name") or not cfg.get("cache", {}).get("local_cache_dir"):
-        raise ValueError("Bucket and local cache directory are required")
+    if not cfg.get("r2", {}).get("bucket_name"):
+        raise ValueError("Bucket is required")
     pipeline = cfg.setdefault("pipeline", {})
     pipeline.setdefault("samples", [])
     pipeline.setdefault("mosaic_resize_factor", 0.5)
@@ -343,11 +343,14 @@ def execute(cfg, *, client=None, preflight=False):
             sum(len(m["excluded"]) for m in manifests.values()),
         )
         return 0
-    cache = Path(cfg["cache"]["local_cache_dir"]).expanduser().resolve()
-    cache.mkdir(parents=True, exist_ok=True)
+    cache_value = os.environ.get("LOBLOLLY_CACHE_DIR") or cfg["cache"].get("local_cache_dir") or "/tmp/loblolly-cache"
+    cache_dir = Path(cache_value).expanduser().resolve()
+    cache_source = "LOBLOLLY_CACHE_DIR" if os.environ.get("LOBLOLLY_CACHE_DIR") else "config/default"
+    log.info("Cache dir: %s (from %s)", cache_dir, cache_source)
+    cache_dir.mkdir(parents=True, exist_ok=True)
     code = code_identity()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex[:12]
-    run_dir = contained_path(cache / "runs", run_id)
+    run_dir = contained_path(cache_dir / "runs", run_id)
     run_dir.mkdir(parents=True, exist_ok=False)
     status = {
         "run_id": run_id,
@@ -379,7 +382,7 @@ def execute(cfg, *, client=None, preflight=False):
                 record["resolved_model"] = model_info
                 publish_json("run.json", record)
             manifest = manifests[name]
-            inputs = contained_path(cache / "inputs", f"{name}/{fingerprint(manifest)}/tiles")
+            inputs = contained_path(cache_dir / "inputs", f"{name}/{fingerprint(manifest)}/tiles")
             paths = sync_inputs(client, bucket, manifest, inputs)
             provenance = {
                 "schema": 2,
@@ -395,7 +398,7 @@ def execute(cfg, *, client=None, preflight=False):
                 },
             }
             identity = fingerprint(provenance)
-            output = contained_path(cache / "artifacts", f"{name}/{identity}")
+            output = contained_path(cache_dir / "artifacts", f"{name}/{identity}")
             result = run_sample(name, output, cfg, paths=paths, model=model, provenance=provenance)
             artifacts = upload_sample_outputs(client, bucket, name, output, run_id, result, run_dir)
             status["samples"][name] = {"state": "succeeded", "artifact_id": identity, "artifacts": artifacts}
