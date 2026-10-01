@@ -1,7 +1,7 @@
 [cache]
-# Override with a user-owned scratch directory on Pegasus.
-local_cache_dir = "data/cache"
-
+#local_cache_dir is set via LOBLOLLY_CACHE_DIR environment variable at runtime
+#On Pegasus: export LOBLOLLY_CACHE_DIR=/scratch/shossain/loblolly-cache
+#On Mac: export LOBLOLLY_CACHE_DIR=/tmp/loblolly-cache
 [pipeline]
 # Start with one explicitly named sample. Empty selects all validated manifests.
 samples = ["REF_636_RECENT"]
@@ -15,10 +15,7 @@ max_analysis_pixels = 25000000
 # sample_registry = "samples.json"
 
 [cellpose]
-device = "auto" # cpu, mps, cuda, or auto; the resolved device is recorded
-model = "cpsam_v2"
-# Optional rescaling diameter in analysis-image pixels; omission uses the model's native scale.
-# diameter = 30.0
+use_gpu = true
 
 [r2]
 bucket_name = "sehrin-image-stitching"
