@@ -84,6 +84,8 @@ This writes stacked proportions and descriptive specimen-mean area plots. It req
 
 ## Performance and Pegasus
 
+For a step-by-step student implementation plan, see [Mixed-bit-depth tiles and local/Pegasus runs](docs/mixed-depth-and-runtime-profiles.md). It explains the reported failures, gives runnable per-machine TOML examples, and proposes conversion and diagnostic changes; the proposed code changes are not implemented yet.
+
 This release removes the per-cell full-mosaic distance transforms and dilations identified in review. It **does not implement a fully streamed mosaic/inference pipeline**. OpenCV still loads source images and Cellpose still receives the full analysis image. Tiled TIFF storage alone does not bound those allocations.
 
 `max_input_gb` and `max_analysis_pixels` are explicit guardrails, not measured total-RAM requirements. Defaults are conservative pilot limits; larger samples may intentionally stop. Additional arrays, feature matching, mosaic blending, and neural inference need more RAM than the image inputs alone. Record `qc.json` stage timings and actual peak host/GPU memory on a representative pilot before raising limits or scheduling the dataset. No M4 or V100 throughput is promised. MLX and window/seam reconciliation are not implemented here.
