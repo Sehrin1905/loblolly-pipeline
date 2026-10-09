@@ -343,7 +343,9 @@ def execute(cfg, *, client=None, preflight=False):
             sum(len(m["excluded"]) for m in manifests.values()),
         )
         return 0
-    cache_value = os.environ.get("LOBLOLLY_CACHE_DIR") or cfg["cache"].get("local_cache_dir") or "/tmp/loblolly-cache"
+    cache_value = (
+        os.environ.get("LOBLOLLY_CACHE_DIR") or cfg["cache"].get("local_cache_dir") or "/tmp/loblolly-cache"
+    )
     cache_dir = Path(cache_value).expanduser().resolve()
     cache_source = "LOBLOLLY_CACHE_DIR" if os.environ.get("LOBLOLLY_CACHE_DIR") else "config/default"
     log.info("Cache dir: %s (from %s)", cache_dir, cache_source)

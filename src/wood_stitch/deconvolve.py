@@ -2,8 +2,9 @@
 import numpy as np
 import cv2
 
-# No published stain vectors exist for safranin/astra blue — 
+# No published stain vectors exist for safranin/astra blue —
 # we have to estimate them from the image using Macenko method.
+
 
 def rgb_to_od(img: np.ndarray, beta: float = 0.15) -> np.ndarray:
     """
@@ -18,9 +19,7 @@ def rgb_to_od(img: np.ndarray, beta: float = 0.15) -> np.ndarray:
     return od
 
 
-def estimate_stain_vectors_macenko(od: np.ndarray,
-                                   alpha: float = 1.0,
-                                   beta: float = 0.15) -> np.ndarray:
+def estimate_stain_vectors_macenko(od: np.ndarray, alpha: float = 1.0, beta: float = 0.15) -> np.ndarray:
     """
     Estimate two stain vectors from OD image using Macenko PCA method.
     Returns (2, 3) array: [safranin_vector, astra_blue_vector].
@@ -78,8 +77,7 @@ def build_unmixing_matrix(stain_vectors: np.ndarray) -> np.ndarray:
     return np.linalg.inv(stain_matrix.T)
 
 
-def separate_stains(od: np.ndarray,
-                    unmixing_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def separate_stains(od: np.ndarray, unmixing_matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Apply unmixing matrix to OD image.
     Returns (safranin, astra_blue, residual) concentration maps.
@@ -89,9 +87,9 @@ def separate_stains(od: np.ndarray,
     concentrations = (unmixing_matrix @ od_flat.T).T
     concentrations = np.clip(concentrations, 0, None)
     concentrations = concentrations.reshape(h, w, 3)
-    safranin  = concentrations[:, :, 0]
+    safranin = concentrations[:, :, 0]
     astra_blue = concentrations[:, :, 1]
-    residual  = concentrations[:, :, 2]
+    residual = concentrations[:, :, 2]
     return safranin, astra_blue, residual
 
 
@@ -123,7 +121,5 @@ def deconvolve(img: np.ndarray) -> dict[str, np.ndarray]:
         "safranin": safranin,
         "astra_blue": astra_blue,
         "residual": residual,
-        "stain_vectors": stain_vectors
+        "stain_vectors": stain_vectors,
     }
-
-
