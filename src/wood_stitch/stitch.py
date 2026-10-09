@@ -23,6 +23,17 @@ def tile_paths(directory):
     )
 
 
+def to_uint8(img):
+    """uint8 passes through; 12-bit data in a uint16 container is shifted down by 4 bits."""
+    if img.dtype == np.uint8:
+        return img
+    if img.dtype == np.uint16:
+        if img.max() > 4095:
+            raise ValueError("uint16 tile exceeds the 12-bit range; scaling is unverified")
+        return (img >> 4).astype(np.uint8)
+    raise ValueError(f"Unsupported tile dtype: {img.dtype}")
+
+
 def stitch(tile_dir, out_path="mosaic.ome.tif", *, paths=None, max_input_gb=2.0, provenance=None):
     paths = list(paths) if paths is not None else tile_paths(tile_dir)
     if not paths:
@@ -33,7 +44,7 @@ def stitch(tile_dir, out_path="mosaic.ome.tif", *, paths=None, max_input_gb=2.0,
         raise ValueError("Tiles have inconsistent physical calibration")
     if not np.isclose(*scales[0], rtol=1e-6, atol=0):
         raise ValueError("Stitching anisotropic pixels needs a calibrated resampling step")
-    if any(i["dtype"] != "uint8" or len(i["shape"]) != 3 for i in infos):
+    if any(i["dtype"] not in ("uint8", "uint16") or len(i["shape"]) != 3 for i in infos):
         raise ValueError("Stitching currently requires single-plane uint8 RGB TIFFs")
     decoded_bytes = sum(int(np.prod(i["shape"])) for i in infos)
     if decoded_bytes > max_input_gb * 1e9:
@@ -41,7 +52,7 @@ def stitch(tile_dir, out_path="mosaic.ome.tif", *, paths=None, max_input_gb=2.0,
             f"Tiles alone need {decoded_bytes / 1e9:.2f} GB; input limit is {max_input_gb} GB. "
             "Choose a smaller pilot or explicitly raise the limit on a profiled machine."
         )
-    images = [read_image(p)[0] for p in paths]
+    images = [to_uint8(read_image(p)[0]) for p in paths]
     coverage = {
         "expected": [p.name for p in paths],
         "input_files": [str(p) for p in paths],

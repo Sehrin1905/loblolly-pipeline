@@ -1,0 +1,15 @@
+[cache]
+local_cache_dir = "data/cache"
+
+[pipeline]
+samples = ["REF_851_Recent"]
+mosaic_resize_factor = 0.35
+max_input_gb = 2.0
+max_analysis_pixels = 25000000
+
+[cellpose]
+device = "mps"
+model = "cpsam_v2"
+
+[r2]
+bucket_name = "sehrin-image-stitching"
