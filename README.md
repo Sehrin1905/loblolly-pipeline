@@ -90,16 +90,16 @@ This release removes the per-cell full-mosaic distance transforms and dilations 
 
 `max_input_gb` and `max_analysis_pixels` are explicit guardrails, not measured total-RAM requirements. Defaults are conservative pilot limits; larger samples may intentionally stop. Additional arrays, feature matching, mosaic blending, and neural inference need more RAM than the image inputs alone. Record `qc.json` stage timings and actual peak host/GPU memory on a representative pilot before raising limits or scheduling the dataset. No M4 or V100 throughput is promised. MLX and window/seam reconciliation are not implemented here.
 
-Before Pegasus submission, select a user-owned scratch path, install uv/load site-approved modules, and create `logs/` **before** `sbatch` opens output paths. Verify the actual cluster GPU partition/account options with your allocation.
+Before Pegasus submission, select a user-owned scratch path and prepare a current `uv` plus the locked inference environment. The committed `configs/pegasus_ref636.toml` selects one full-resolution REF 636 pilot and Riley's verified scratch path; other submitters must change the path or explicitly set `LOBLOLLY_CACHE_DIR`. Keep R2 credentials in an untracked `.env` with permissions `0600`. Create `logs/` **before** `sbatch` opens output paths. Verify the actual cluster GPU partition/account options with your allocation.
 
 ```bash
 mkdir -p logs
 uv sync --locked --extra inference
-uv run --locked --extra inference python scripts/check_device.py --device cuda
+uv run --locked python scripts/run_pipeline.py --config configs/pegasus_ref636.toml --preflight
 sbatch scripts/submit_pegasus.sh
 ```
 
-The script uses fail-fast shell behavior and runs a device tensor check before the pipeline. It does not guess site module names or install software through a shell download during the job. For a separate config: `LOBLOLLY_CONFIG=/path/to/pilot.toml sbatch scripts/submit_pegasus.sh`.
+The script selects the `gpu` partition and one V100, uses fail-fast shell behavior, and runs a device tensor check **inside the allocation** before the pipeline. Its default config is `configs/pegasus_ref636.toml`; use `LOBLOLLY_CONFIG=/path/to/pilot.toml sbatch scripts/submit_pegasus.sh` for another profile. It preserves an explicitly set cache override and otherwise uses the TOML path. It does not guess site module names or install uv through a shell download during the job. Prebuilt torch includes CUDA runtime dependencies; loading a system CUDA toolkit is not required for this pipeline. The NVIDIA driver and wheel's GPU architecture support still need the in-job check. Installing dependencies is preparation, not a GPU test; keep substantial setup work in a suitable Slurm allocation under site policy.
 
 ## Standalone stages
 

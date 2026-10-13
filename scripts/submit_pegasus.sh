@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=loblolly-pipeline
+#SBATCH --partition=gpu
 #SBATCH --output=logs/pipeline_%j.log
 #SBATCH --error=logs/pipeline_%j.err
 #SBATCH --time=48:00:00
@@ -8,41 +9,18 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:v100:1
-#SBATCH --mail-type=BEGIN,END,FAIL
-#SBATCH --mail-user=your_email@gwu.edu
 
-# ── Environment setup ─────────────────────────────────────────────────────────
-echo "Job started: $(date)"
-echo "Running on: $(hostname)"
-echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo 'No GPU')"
-
-# Load modules (adjust for Pegasus module system)
-module load python/3.13
-module load cuda/11.8
-
-# Go to repo
-cd "$SLURM_SUBMIT_DIR"
-
-# Install uv if not available
-if ! command -v uv &> /dev/null; then
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    source ~/.bashrc
-fi
-
-# Install dependencies
-uv sync
-
-# Create logs directory
-mkdir -p logs
-
-# Cache directory: override with LOBLOLLY_CACHE_DIR, else use this default
-export LOBLOLLY_CACHE_DIR="${LOBLOLLY_CACHE_DIR:-/scratch/shossain/loblolly-cache}"
-mkdir -p "$LOBLOLLY_CACHE_DIR" || true
-
-# Run pipeline and keep its exit code
-echo "Starting pipeline..."
-uv run scripts/run_pipeline.py --config "${LOBLOLLY_CONFIG:-config.toml}"
-status=$?
-
-echo "Job finished: $(date)"
-exit "$status"
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:?Submit from the repository root}"
+# Create logs/ BEFORE sbatch; Slurm opens output files before this script runs.
+# Prepare uv and the locked environment before submission. No CUDA toolkit module
+# is needed for the prebuilt torch wheel; the driver and GPU must support it.
+command -v uv >/dev/null
+config="${LOBLOLLY_CONFIG:-configs/pegasus_ref636.toml}"
+test -f "$config"
+echo "Job started: $(date); host: $(hostname); config: $config"
+uv sync --locked --extra inference
+uv run --locked --extra inference python scripts/check_device.py --device cuda
+# The pipeline honors an explicitly supplied LOBLOLLY_CACHE_DIR; otherwise use
+# the TOML path. Never replace it with another user's scratch directory.
+exec uv run --locked --extra inference python scripts/run_pipeline.py --config "$config"

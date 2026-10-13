@@ -1,12 +1,11 @@
 [cache]
-#local_cache_dir is set via LOBLOLLY_CACHE_DIR environment variable at runtime
-#On Pegasus: export LOBLOLLY_CACHE_DIR=/scratch/shossain/loblolly-cache
-#On Mac: export LOBLOLLY_CACHE_DIR=/tmp/loblolly-cache
+# Optional override: LOBLOLLY_CACHE_DIR. Use configs/pegasus_ref636.toml on Pegasus.
+local_cache_dir = "data/cache"
 
 [pipeline]
 # Start with one explicitly named sample. Empty selects all validated manifests.
 samples = ["REF_636_RECENT"]
-mosaic_resize_factor = 1.0
+mosaic_resize_factor = 0.35
 # Guardrails, not measured peak-RAM requirements. Additional workspaces need more RAM.
 max_input_gb = 2.0
 max_analysis_pixels = 25000000
@@ -16,7 +15,8 @@ max_analysis_pixels = 25000000
 # sample_registry = "samples.json"
 
 [cellpose]
-use_gpu = true
+device = "auto"
+model = "cpsam_v2"
 
 [r2]
 bucket_name = "sehrin-image-stitching"

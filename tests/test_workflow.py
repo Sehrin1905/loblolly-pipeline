@@ -157,8 +157,13 @@ def test_slurm_exit_status_and_paths_with_spaces(tmp_path, failure):
     repo = Path(__file__).resolve().parents[1]
     directory = tmp_path / "path with spaces"
     directory.mkdir()
+    (directory / "configs").mkdir()
+    (directory / "configs/pegasus_ref636.toml").write_text("# selected profile\n")
     code = 17 if failure else 0
-    shell = f'uv() {{ return {code}; }}; export SLURM_SUBMIT_DIR="$PWD"; source "$1"'
+    binary = directory / "uv"
+    binary.write_text(f"#!/bin/bash\nexit {code}\n")
+    binary.chmod(0o700)
+    shell = 'export PATH="$PWD:$PATH" SLURM_SUBMIT_DIR="$PWD"; unset LOBLOLLY_CONFIG; source "$1"'
     result = subprocess.run(
         ["bash", "-c", shell, "test", str(repo / "scripts/submit_pegasus.sh")],
         cwd=directory,
