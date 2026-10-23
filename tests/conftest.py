@@ -107,5 +107,5 @@ def fake_model(monkeypatch):
     monkeypatch.setattr(
         pipeline, "create_model", lambda settings: (model, {"device": "fake", "weights_sha256": "test-model"})
     )
-    monkeypatch.setattr(pipeline, "make_tissue_mask", lambda image: np.ones(image.shape[:2], bool))
+    monkeypatch.setattr(pipeline, "make_tissue_mask", lambda image, **kwargs: np.ones(image.shape[:2], bool))
     return calls

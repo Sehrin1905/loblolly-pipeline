@@ -240,7 +240,10 @@ def run_sample(name, directory, cfg, *, paths, model, provenance):
             raise MemoryError(
                 "Analysis image exceeds max_analysis_pixels; use a smaller pilot or profile before raising it"
             )
-        mask = timed("tissue_mask", lambda: make_tissue_mask(image))
+        mask = timed(
+            "tissue_mask",
+            lambda: make_tissue_mask(image, scale=cfg["pipeline"]["mosaic_resize_factor"] / 0.5),
+        )
         if not mask.any():
             raise ValueError("No tissue detected; inspect the input and mask settings")
         write_image(directory / "tissue-mask.ome.tif", mask.astype(np.uint8), scale, annotations)
