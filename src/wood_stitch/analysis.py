@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 
-CLASSES = ["ray", "tracheid", "resin_duct"]
+CLASSES = ["ray", "tracheid", "resin_duct", "large_object"]
 
 
 def summarize(cells, samples):
@@ -14,13 +14,16 @@ def summarize(cells, samples):
     if (~np.isfinite(cells["area_um2"])).any() or (cells["area_um2"] <= 0).any():
         raise ValueError("Cell areas must be finite positive µm² values")
     rows = []
+    # Only report classes that actually occur, so an unmeasured class
+    # (e.g. rays in v4 results) is absent instead of reading 0%.
+    present = [kind for kind in CLASSES if (cells["cell_type"] == kind).any()]
     for sample in samples:
         name = sample["sample_id"]
         subset = cells[cells["sample_id"] == name]
         row = dict(sample)
         row["total_cells"] = len(subset)
         row["ray_fraction_denominator"] = "all_classified_lumens"
-        for kind in CLASSES:
+        for kind in present:
             count = int((subset["cell_type"] == kind).sum())
             row[kind + "_count"] = count
             row[kind + "_percent"] = 100 * count / len(subset) if len(subset) else float("nan")

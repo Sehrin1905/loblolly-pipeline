@@ -31,7 +31,8 @@ def main(argv=None):
         raise ValueError("A sample contains no accepted cells; inspect QC before comparing specimens")
     out = args.run_dir / "figures"
     out.mkdir(exist_ok=True)
-    values = summary.set_index("sample_id")[[kind + "_percent" for kind in CLASSES]]
+    columns = [kind + "_percent" for kind in CLASSES if kind + "_percent" in summary.columns]
+    values = summary.set_index("sample_id")[columns]
     ax = values.plot.bar(stacked=True, figsize=(12, 6))
     ax.set_ylabel("Percent of all classified lumens (includes resin ducts)")
     ax.set_title("Exploratory rule-based classifications; not validated cell identities")

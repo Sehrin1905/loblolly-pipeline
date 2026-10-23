@@ -7,6 +7,7 @@ COLOR_MAP = {
     "tracheid": (200, 200, 200),  # light gray
     "ray": (0, 200, 0),  # green
     "resin_duct": (0, 0, 255),  # red (BGR)
+    "large_object": (255, 0, 255),  # magenta (BGR)
 }
 
 
