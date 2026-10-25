@@ -34,7 +34,7 @@ def main(argv=None):
     columns = [kind + "_percent" for kind in CLASSES if kind + "_percent" in summary.columns]
     values = summary.set_index("sample_id")[columns]
     ax = values.plot.bar(stacked=True, figsize=(12, 6))
-    ax.set_ylabel("Percent of all classified lumens (includes resin ducts)")
+    ax.set_ylabel("Percent of all segmented objects (large_object = possible tears or resin ducts)")
     ax.set_title("Exploratory rule-based classifications; not validated cell identities")
     ax.figure.tight_layout()
     ax.figure.savefig(out / "cell_type_proportions.png", dpi=150)

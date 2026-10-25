@@ -22,7 +22,7 @@ def summarize(cells, samples):
         subset = cells[cells["sample_id"] == name]
         row = dict(sample)
         row["total_cells"] = len(subset)
-        row["ray_fraction_denominator"] = "all_classified_lumens"
+        row["percent_denominator"] = "all_classified_lumens"
         for kind in present:
             count = int((subset["cell_type"] == kind).sum())
             row[kind + "_count"] = count
