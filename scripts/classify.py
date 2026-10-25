@@ -1,5 +1,10 @@
 """
-Classify cells as tracheid, ray, or resin duct.
+Classify segmented cells as tracheid or large_object, and add within-sample zones.
+
+Rays are not classified (unmeasured, not zero). Objects above 10x the sample
+median area are labelled large_object (possible tears or resin ducts). Tracheids
+also get a 'zone' (earlywood-like, transition, latewood-like) and a continuous
+'zone_score'; zones are relative within each sample.
 
 Usage:
     uv run scripts/classify.py <features_path> <out_path>
