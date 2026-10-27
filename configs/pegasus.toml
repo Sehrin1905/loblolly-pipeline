@@ -1,0 +1,15 @@
+[cache]
+local_cache_dir = "/scratch/gedanlab/rileyleff/loblolly-cache"
+
+[pipeline]
+samples = ["REF_851_Recent"]
+mosaic_resize_factor = 1.0
+max_input_gb = 2.0
+max_analysis_pixels = 180000000
+
+[cellpose]
+device = "cuda"
+model = "cpsam_v2"
+
+[r2]
+bucket_name = "sehrin-image-stitching"
