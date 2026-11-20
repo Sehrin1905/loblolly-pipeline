@@ -1,0 +1,20 @@
+[cache]
+# Verified for runs submitted by Riley. Other users must choose their own path.
+local_cache_dir = "/scratch/gedanlab/rileyleff/loblolly-cache"
+
+[pipeline]
+samples = ["REF_636_RECENT"]
+mosaic_resize_factor = 1.0
+max_input_gb = 2.0
+# REF_636_RECENT mosaic is 8164 x 14096 = 115,079,744 pixels.
+# This is a policy guard, not a measured memory guarantee.
+max_analysis_pixels = 120000000
+
+[cellpose]
+device = "cuda"
+model = "cpsam_v2"
+# Test setting: crops of REF_636_RECENT and REF_851_Recent looked better than the default.
+diameter = 40
+
+[r2]
+bucket_name = "sehrin-image-stitching"
